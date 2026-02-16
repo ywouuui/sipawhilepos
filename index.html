@@ -1,0 +1,411 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#274c42" />
+  <title>Sip Awhile Cafe POS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-bg" aria-hidden="true"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <h1>Sip Awhile</h1>
+      <p>Cafe POS</p>
+    </div>
+
+    <nav class="menu" aria-label="Main">
+      <button class="menu-item is-active" data-section="dashboard">Dashboard</button>
+      <button class="menu-item" data-section="checkout">Checkout</button>
+      <button class="menu-item" data-section="orders">Orders</button>
+      <button class="menu-item" data-section="customers">Customers</button>
+      <button class="menu-item" data-section="products">Product</button>
+      <button class="menu-item" data-section="transactions">Transaction</button>
+      <button class="menu-item" data-section="finance">Finance</button>
+      <button class="menu-item" data-section="settings">Settings</button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <p id="live-time">--:--</p>
+      <div class="auth-row">
+        <small id="currentUser">Not signed in</small>
+        <button id="logoutBtn" class="secondary" type="button">Logout</button>
+      </div>
+      <small class="foot-label">Android Web POS</small>
+    </div>
+  </aside>
+
+  <div class="overlay" id="overlay"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn" id="menuToggle" aria-label="Toggle sidebar">☰</button>
+      <div>
+        <h2 id="sectionTitle">Dashboard</h2>
+        <p>Run your counter, orders, receipts, and inventory in one place.</p>
+      </div>
+    </header>
+
+    <section class="panel is-visible" id="dashboard-panel">
+      <div class="stats-grid">
+        <article class="stat"><p>Today Revenue</p><h3 id="dashTodayRevenue">₱0.00</h3></article>
+        <article class="stat"><p>Today Orders</p><h3 id="dashTodayOrders">0</h3></article>
+        <article class="stat"><p>Pending Orders</p><h3 id="dashPendingOrders">0</h3></article>
+        <article class="stat"><p>Low Stock Items</p><h3 id="dashLowStock">0</h3></article>
+      </div>
+
+      <div class="two-col">
+        <article class="card">
+          <div class="card-head"><h3>Sales By Category</h3></div>
+          <ul class="list" id="dashCategorySales"></ul>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><h3>Category Best Sellers</h3></div>
+          <ul class="list" id="dashBestSellers"></ul>
+        </article>
+      </div>
+
+      <div class="two-col">
+        <article class="card">
+          <div class="card-head"><h3>Top Products</h3></div>
+          <ul class="list" id="dashTopProducts"></ul>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><h3>Recent Activity</h3></div>
+          <ul class="list" id="dashRecentOrders"></ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="checkout-panel">
+      <div class="checkout-layout">
+        <article class="card">
+          <div class="card-head">
+            <h3>Products</h3>
+            <select id="checkoutCategory"></select>
+          </div>
+          <div class="products-grid" id="checkoutProducts"></div>
+        </article>
+
+        <article class="card cart-card">
+          <div class="card-head">
+            <h3>Order Details</h3>
+            <span id="cartCount">0 items</span>
+          </div>
+
+          <label class="label" for="checkoutCustomerName">Customer Name (Optional)</label>
+          <input id="checkoutCustomerName" type="text" placeholder="Type customer name" list="customerNameSuggestions" />
+          <datalist id="customerNameSuggestions"></datalist>
+
+          <label class="label" for="checkoutOrderType">Order Type</label>
+          <select id="checkoutOrderType">
+            <option value="Dine In" selected>Dine In</option>
+            <option value="Take Out">Take Out</option>
+          </select>
+
+          <ul class="cart-list" id="cartList"></ul>
+
+          <div class="totals">
+            <p class="grand"><span>Total</span><strong id="total">₱0.00</strong></p>
+          </div>
+
+          <div class="action-row">
+            <button class="primary" id="completeSaleBtn">Proceed to Order</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="orders-panel">
+      <article class="card">
+        <div class="card-head"><h3>Orders</h3></div>
+        <div class="filter-row">
+          <input id="ordersFromDate" type="date" />
+          <input id="ordersToDate" type="date" />
+          <button id="ordersFilterBtn" class="secondary mini" type="button">Filter</button>
+          <button id="ordersClearBtn" class="secondary mini" type="button">Clear</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Order ID</th><th>Time</th><th>Customer</th><th>Type</th><th>Items</th><th>Total</th><th>Payment</th><th>Order</th><th>Method</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="ordersTable"></tbody>
+          </table>
+        </div>
+        <div id="ordersPagination" class="pagination"></div>
+      </article>
+    </section>
+
+    <section class="panel" id="customers-panel">
+      <div class="two-col">
+        <article class="card">
+          <div class="card-head"><h3>Add Customer</h3></div>
+          <form id="customerForm" class="form-grid">
+            <input required name="name" placeholder="Full name" />
+            <input required name="phone" placeholder="Phone" />
+            <input name="email" placeholder="Email" />
+            <button class="primary" type="submit">Save Customer</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><h3>Customer List</h3></div>
+          <div class="filter-row">
+            <input id="customersFromDate" type="date" />
+            <input id="customersToDate" type="date" />
+            <button id="customersFilterBtn" class="secondary mini" type="button">Filter</button>
+            <button id="customersClearBtn" class="secondary mini" type="button">Clear</button>
+          </div>
+          <ul class="list" id="customerList"></ul>
+          <div id="customersPagination" class="pagination"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="products-panel">
+      <div class="two-col">
+        <article class="card">
+          <div class="card-head"><h3>Category + Product</h3></div>
+          <form id="categoryForm" class="inline-form">
+            <input required name="categoryName" placeholder="Add category (e.g. Coffee)" />
+            <input name="categorySizes" placeholder="Sizes (optional, e.g. Small,Medium,Large)" />
+            <button class="secondary" type="submit">Add Category</button>
+          </form>
+
+          <form id="productForm" class="form-grid">
+            <input required name="name" placeholder="Product name" />
+            <input id="productBasePrice" required name="price" type="number" min="0" step="0.01" placeholder="Price" />
+            <input required name="stock" type="number" min="0" step="1" placeholder="Stock qty" />
+            <select required name="category" id="productCategory"></select>
+            <label class="label" for="productIsDrink">
+              <input id="productIsDrink" name="isDrink" type="checkbox" />
+              This product is a drink (with sizes)
+            </label>
+            <div id="productSizeGroup" style="display:none;">
+              <label class="label">Size Prices</label>
+              <div id="sizePriceFields" class="form-grid"></div>
+            </div>
+            <input name="image" type="file" accept="image/*" />
+            <button class="primary" type="submit">Add Product</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <h3>Inventory Control</h3>
+            <span id="lowStockCount">0 low stock</span>
+          </div>
+          <input id="inventorySearch" type="text" placeholder="Search product..." />
+          <ul class="inventory" id="inventoryList"></ul>
+          <div id="inventoryPagination" class="pagination"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="transactions-panel">
+      <article class="card">
+        <div class="card-head"><h3>Transactions</h3></div>
+        <div class="filter-row">
+          <input id="transactionsFromDate" type="date" />
+          <input id="transactionsToDate" type="date" />
+          <button id="transactionsFilterBtn" class="secondary mini" type="button">Filter</button>
+          <button id="transactionsClearBtn" class="secondary mini" type="button">Clear</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Txn</th><th>Order</th><th>Date</th><th>Method</th><th>Amount</th></tr>
+            </thead>
+            <tbody id="transactionsTable"></tbody>
+          </table>
+        </div>
+        <div id="transactionsPagination" class="pagination"></div>
+      </article>
+    </section>
+
+    <section class="panel" id="finance-panel">
+      <div class="stats-grid">
+        <article class="stat"><p>Revenue</p><h3 id="revenueValue">₱0.00</h3></article>
+        <article class="stat"><p>Orders</p><h3 id="ordersValue">0</h3></article>
+        <article class="stat"><p>Average Ticket</p><h3 id="avgValue">₱0.00</h3></article>
+        <article class="stat"><p>Inventory Units</p><h3 id="inventoryValue">0</h3></article>
+        <article class="stat"><p>Cash Drawer</p><h3 id="financeDrawerValue">₱0.00</h3></article>
+        <article class="stat"><p>Expenses</p><h3 id="financeExpenseValue">₱0.00</h3></article>
+      </div>
+
+      <div class="two-col">
+        <article class="card">
+          <div class="card-head"><h3>Shift Control</h3></div>
+          <form id="shiftForm" class="inline-form">
+            <input id="shiftOpenAmount" type="number" min="0" step="0.01" placeholder="Opening drawer amount" />
+            <button class="primary" id="openShiftBtn" type="submit">Open Shift</button>
+            <button class="secondary" id="closeShiftBtn" type="button">Close Shift</button>
+          </form>
+          <ul class="list">
+            <li><span>Status</span><strong id="shiftStatus">Closed</strong></li>
+            <li><span>Opening Amount</span><strong id="shiftOpeningAmount">₱0.00</strong></li>
+            <li><span>Money In Drawer</span><strong id="shiftDrawerAmount">₱0.00</strong></li>
+          </ul>
+          <div class="card-head"><h3>Shift Logs</h3></div>
+          <div class="filter-row">
+            <input id="shiftLogsFromDate" type="date" />
+            <input id="shiftLogsToDate" type="date" />
+            <button id="shiftLogsFilterBtn" class="secondary mini" type="button">Filter</button>
+            <button id="shiftLogsClearBtn" class="secondary mini" type="button">Clear</button>
+          </div>
+          <ul class="list" id="shiftLogList"></ul>
+          <div id="shiftLogsPagination" class="pagination"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><h3>Expenses</h3></div>
+          <form id="expenseForm" class="inline-form">
+            <input id="expenseNote" type="text" placeholder="Expense note" required />
+            <input id="expenseAmount" type="number" min="0" step="0.01" placeholder="Amount" required />
+            <button class="secondary" type="submit">Add Expense</button>
+          </form>
+          <div class="filter-row">
+            <input id="expensesFromDate" type="date" />
+            <input id="expensesToDate" type="date" />
+            <button id="expensesFilterBtn" class="secondary mini" type="button">Filter</button>
+            <button id="expensesClearBtn" class="secondary mini" type="button">Clear</button>
+          </div>
+          <ul class="list" id="expenseList"></ul>
+          <div id="expensesPagination" class="pagination"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="settings-panel">
+      <article class="card">
+        <div class="card-head"><h3>Cafe Settings</h3></div>
+        <form id="settingsForm" class="form-grid">
+          <input required name="cafeName" placeholder="Cafe name" />
+          <input required name="address" placeholder="Address" />
+          <input required name="phone" placeholder="Phone" />
+          <label class="label" for="receiptQrImageInput">Receipt QR Image (Optional)</label>
+          <input id="receiptQrImageInput" name="receiptQrImage" type="file" accept="image/*" />
+          <button class="primary" type="submit">Save Settings</button>
+        </form>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="receiptDialog">
+    <article class="receipt-modal">
+      <header>
+        <h3>Receipt Preview</h3>
+        <button id="closeReceipt" class="icon-btn" aria-label="Close">✕</button>
+      </header>
+      <pre id="receiptText"></pre>
+      <div class="action-row">
+        <button id="downloadReceipt" class="secondary">Download</button>
+        <button id="printReceipt" class="primary">Print</button>
+      </div>
+    </article>
+  </dialog>
+
+  <dialog id="paymentDialog">
+    <article class="receipt-modal">
+      <header>
+        <h3>Mark Order as Paid</h3>
+        <button id="closePayment" class="icon-btn" aria-label="Close">✕</button>
+      </header>
+      <form id="paymentForm" class="form-grid">
+        <input id="paymentOrderId" type="text" readonly />
+        <input id="paymentOrderTotal" type="text" readonly />
+        <label class="label" for="paymentMethodInput">Payment Method</label>
+        <select id="paymentMethodInput" required>
+          <option value="Cash">Cash</option>
+          <option value="Card">Card</option>
+          <option value="E-Wallet">E-Wallet</option>
+        </select>
+        <label class="label" for="paymentReceivedInput">Payment Received</label>
+        <input id="paymentReceivedInput" type="number" min="0" step="0.01" required />
+        <p><span>Change:</span> <strong id="paymentChangeDisplay">₱0.00</strong></p>
+        <button class="primary" id="confirmPaidBtn" type="submit">Confirm Payment</button>
+      </form>
+    </article>
+  </dialog>
+
+  <dialog id="orderViewDialog">
+    <article class="receipt-modal">
+      <header>
+        <h3>Order Details</h3>
+        <button id="closeOrderView" class="icon-btn" aria-label="Close">✕</button>
+      </header>
+      <div id="orderViewContent"></div>
+    </article>
+  </dialog>
+
+  <dialog id="editOrderDialog">
+    <article class="receipt-modal">
+      <header>
+        <h3>Edit Unpaid Order</h3>
+        <button id="closeEditOrder" class="icon-btn" aria-label="Close">✕</button>
+      </header>
+      <form id="editOrderForm" class="form-grid">
+        <input id="editOrderId" type="text" readonly />
+        <label class="label" for="editOrderCustomerName">Customer Name</label>
+        <input id="editOrderCustomerName" type="text" />
+        <label class="label" for="editOrderType">Order Type</label>
+        <select id="editOrderType">
+          <option value="Dine In">Dine In</option>
+          <option value="Take Out">Take Out</option>
+        </select>
+        <div class="inline-form">
+          <select id="editOrderProductSelect"></select>
+          <button id="editOrderAddItemBtn" class="secondary" type="button">Add Item</button>
+        </div>
+        <ul class="cart-list" id="editOrderItems"></ul>
+        <div class="totals">
+          <p class="grand"><span>Total</span><strong id="editOrderTotal">₱0.00</strong></p>
+        </div>
+        <button class="primary" type="submit">Save Changes</button>
+      </form>
+    </article>
+  </dialog>
+
+  <dialog id="customerViewDialog">
+    <article class="receipt-modal">
+      <header>
+        <h3>Customer Activity</h3>
+        <button id="closeCustomerView" class="icon-btn" aria-label="Close">✕</button>
+      </header>
+      <div class="inline-form">
+        <input id="customerFromDate" type="date" />
+        <input id="customerToDate" type="date" />
+        <button id="customerFilterBtn" class="secondary" type="button">Filter</button>
+      </div>
+      <div id="customerViewContent"></div>
+    </article>
+  </dialog>
+
+  <dialog id="loginDialog">
+    <article class="receipt-modal">
+      <header>
+        <h3>POS Login</h3>
+      </header>
+      <form id="loginForm" class="form-grid">
+        <input id="loginPasscode" type="password" placeholder="Enter admin passcode" required />
+        <small id="loginError" style="color:#b03d34;"></small>
+        <button class="primary" type="submit">Login</button>
+      </form>
+      <small>Admin only access</small>
+    </article>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
