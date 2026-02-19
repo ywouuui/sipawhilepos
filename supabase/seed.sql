@@ -7,7 +7,6 @@ on conflict do nothing;
 insert into categories (name, sizes, is_drink)
 values
   ('Coffee', array['Small','Medium','Large'], true),
-  ('Tea', array['Small','Medium','Large'], true),
   ('Food', array[]::text[], false)
 on conflict (name) do update
 set sizes = excluded.sizes,
@@ -27,10 +26,6 @@ from (
     ('Coffee','Cappuccino','Small',3.75::numeric, 20),
     ('Coffee','Cappuccino','Medium',4.25::numeric, 18),
     ('Coffee','Cappuccino','Large',4.75::numeric, 16),
-    ('Tea','Iced Tea','Small',2.50::numeric, 24),
-    ('Tea','Iced Tea','Medium',2.95::numeric, 22),
-    ('Tea','Iced Tea','Large',3.40::numeric, 18),
-    ('Food','Chicken Panini','',7.50::numeric, 12)
 ) as p(category_name, name, size, price, stock)
 join c on c.name = p.category_name
 where not exists (
