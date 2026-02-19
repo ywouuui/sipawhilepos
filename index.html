@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -386,6 +386,28 @@
         <button id="customerFilterBtn" class="secondary" type="button">Filter</button>
       </div>
       <div id="customerViewContent"></div>
+    </article>
+  </dialog>
+
+  <dialog id="productEditDialog">
+    <article class="receipt-modal">
+      <header>
+        <h3>Edit Product</h3>
+        <button id="closeProductEdit" class="icon-btn" aria-label="Close">✕</button>
+      </header>
+      <form id="productEditForm" class="form-grid">
+        <input id="editProductId" type="text" readonly />
+        <input id="editProductName" required type="text" placeholder="Product name" />
+        <input id="editProductSize" type="text" placeholder="Size (optional)" />
+        <input id="editProductPrice" required type="number" min="0" step="0.01" placeholder="Price" />
+        <input id="editProductStock" required type="number" min="0" step="1" placeholder="Stock qty" />
+        <select id="editProductCategory" required></select>
+        <input id="editProductImage" type="file" accept="image/*" />
+        <div class="action-row">
+          <button id="deleteProductBtn" class="secondary" type="button">Delete</button>
+          <button class="primary" type="submit">Save Changes</button>
+        </div>
+      </form>
     </article>
   </dialog>
 
