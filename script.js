@@ -1,4 +1,4 @@
-﻿const state = {
+const state = {
   settings: {
     cafeName: 'Sip Awhile Cafe',
     address: '123 Main St, City',
@@ -99,6 +99,17 @@ const el = {
   inventoryList: document.getElementById('inventoryList'),
   inventoryPagination: document.getElementById('inventoryPagination'),
   lowStockCount: document.getElementById('lowStockCount'),
+  productEditDialog: document.getElementById('productEditDialog'),
+  closeProductEdit: document.getElementById('closeProductEdit'),
+  productEditForm: document.getElementById('productEditForm'),
+  editProductId: document.getElementById('editProductId'),
+  editProductName: document.getElementById('editProductName'),
+  editProductSize: document.getElementById('editProductSize'),
+  editProductPrice: document.getElementById('editProductPrice'),
+  editProductStock: document.getElementById('editProductStock'),
+  editProductCategory: document.getElementById('editProductCategory'),
+  editProductImage: document.getElementById('editProductImage'),
+  deleteProductBtn: document.getElementById('deleteProductBtn'),
 
   transactionsTable: document.getElementById('transactionsTable'),
   transactionsPagination: document.getElementById('transactionsPagination'),
@@ -195,6 +206,7 @@ let lastReceiptOrder = null;
 let activePaymentOrderId = null;
 let activeEditOrderId = null;
 let activeEditDraft = [];
+let activeEditProductId = null;
 let activeCustomerViewName = null;
 const PDF_FONT_URL = 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf';
 const RECEIPT_FB_LINK = 'https://www.facebook.com/sipawhilecafe';
@@ -1331,12 +1343,97 @@ function renderInventory() {
           <div class="inventory-controls">
             <button type="button" data-stock="minus">-</button>
             <button type="button" data-stock="plus">+</button>
+            <button type="button" class="secondary mini" data-product-action="edit">Edit</button>
+            <button type="button" class="secondary mini" data-product-action="delete">Delete</button>
           </div>
         </li>
       `;
     })
     .join('');
   renderPagination(el.inventoryPagination, pager.inventoryPage, totalPageCount, 'inventory');
+}
+
+function openProductEditor(productId) {
+  const product = state.products.find((p) => p.id === productId);
+  if (!product) return;
+  activeEditProductId = productId;
+  el.editProductCategory.innerHTML = state.categories
+    .map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`)
+    .join('');
+  el.editProductId.value = `Product: ${product.id}`;
+  el.editProductName.value = product.name;
+  el.editProductSize.value = product.size || '';
+  el.editProductPrice.value = Number(product.price).toFixed(2);
+  el.editProductStock.value = String(product.stock);
+  el.editProductCategory.value = product.categoryId;
+  el.editProductImage.value = '';
+  el.productEditDialog.showModal();
+}
+
+function closeProductEditor() {
+  activeEditProductId = null;
+  if (el.productEditForm) el.productEditForm.reset();
+  if (el.productEditDialog.open) el.productEditDialog.close();
+}
+
+async function saveProductEditor() {
+  if (!activeEditProductId) return;
+  const product = state.products.find((p) => p.id === activeEditProductId);
+  if (!product) return;
+
+  const name = String(el.editProductName.value || '').trim();
+  const size = String(el.editProductSize.value || '').trim();
+  const price = Number(el.editProductPrice.value || 0);
+  const stock = Number(el.editProductStock.value || 0);
+  const categoryId = String(el.editProductCategory.value || '');
+  if (!name || !categoryId || Number.isNaN(price) || price < 0 || Number.isNaN(stock) || stock < 0) {
+    window.alert('Enter valid product values.');
+    return;
+  }
+
+  const imageFile = el.editProductImage.files?.[0];
+  const image = imageFile ? await fileToDataUrl(imageFile) : product.image;
+
+  product.name = name;
+  product.size = size;
+  product.price = price;
+  product.stock = stock;
+  product.categoryId = categoryId;
+  product.image = image;
+
+  const cartItem = state.cart.get(product.id);
+  if (cartItem) {
+    cartItem.name = productDisplayName(product);
+    cartItem.price = product.price;
+    if (cartItem.qty > product.stock) {
+      cartItem.qty = product.stock;
+      if (cartItem.qty <= 0) state.cart.delete(product.id);
+    }
+  }
+
+  closeProductEditor();
+  renderCheckoutProducts();
+  renderCart();
+  renderInventory();
+  renderFinance();
+  renderDashboard();
+}
+
+function deleteProductById(productId) {
+  const product = state.products.find((p) => p.id === productId);
+  if (!product) return;
+  const ok = window.confirm(`Delete ${productDisplayName(product)}?`);
+  if (!ok) return;
+
+  state.products = state.products.filter((p) => p.id !== productId);
+  state.cart.delete(productId);
+  if (activeEditProductId === productId) closeProductEditor();
+
+  renderCheckoutProducts();
+  renderCart();
+  renderInventory();
+  renderFinance();
+  renderDashboard();
 }
 
 function setSettingsForm() {
@@ -2023,11 +2120,22 @@ function bindEvents() {
   el.inventoryList.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const action = target.getAttribute('data-stock');
-    if (!action) return;
-
     const row = target.closest('li');
     const productId = row?.getAttribute('data-product-id');
+    if (!productId) return;
+
+    const productAction = target.getAttribute('data-product-action');
+    if (productAction === 'edit') {
+      openProductEditor(productId);
+      return;
+    }
+    if (productAction === 'delete') {
+      deleteProductById(productId);
+      return;
+    }
+
+    const action = target.getAttribute('data-stock');
+    if (!action) return;
     const product = state.products.find((p) => p.id === productId);
     if (!product) return;
 
@@ -2038,6 +2146,16 @@ function bindEvents() {
     renderCheckoutProducts();
     renderFinance();
     renderDashboard();
+  });
+
+  el.closeProductEdit.addEventListener('click', closeProductEditor);
+  el.productEditForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await saveProductEditor();
+  });
+  el.deleteProductBtn.addEventListener('click', () => {
+    if (!activeEditProductId) return;
+    deleteProductById(activeEditProductId);
   });
 
   el.settingsForm.addEventListener('submit', async (event) => {
@@ -2082,4 +2200,6 @@ function init() {
 }
 
 init();
+
+
 
