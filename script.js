@@ -7,8 +7,7 @@ const state = {
   },
   categories: [
     { id: idGen(), name: 'Coffee', sizes: ['Small', 'Medium', 'Large'], isDrink: true },
-    { id: idGen(), name: 'Tea', sizes: ['Small', 'Medium', 'Large'], isDrink: true },
-    { id: idGen(), name: 'Food', sizes: [], isDrink: false },
+
   ],
   products: [],
   customers: [
@@ -39,10 +38,7 @@ state.products = [
   makeProduct('Cappuccino', 3.75, 'Coffee', 20, 'Small'),
   makeProduct('Cappuccino', 4.25, 'Coffee', 18, 'Medium'),
   makeProduct('Cappuccino', 4.75, 'Coffee', 16, 'Large'),
-  makeProduct('Iced Tea', 2.5, 'Tea', 24, 'Small'),
-  makeProduct('Iced Tea', 2.95, 'Tea', 22, 'Medium'),
-  makeProduct('Iced Tea', 3.4, 'Tea', 18, 'Large'),
-  makeProduct('Chicken Panini', 7.5, 'Food', 12),
+
 ];
 
 const el = {
