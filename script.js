@@ -231,7 +231,7 @@ const dateFilters = {
 };
 let apiEnabled = false;
 const ADMIN_PASSCODE = 'admin123';
-const SUPABASE_URL = 'https://nmekstsqhfaryqqupiwo.supabase.co';
+const SUPABASE_URL = 'https://qqbzdiprdqkzpqhwyygi.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_NHQjM4l9tEqmX8xB_4kM0A_mHIMqZlQ';
 const supabaseClient =
   window.supabase && typeof window.supabase.createClient === 'function'
