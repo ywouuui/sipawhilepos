@@ -237,8 +237,16 @@ const supabaseClient =
   window.supabase && typeof window.supabase.createClient === 'function'
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
+let settingsDbId = null;
+let shiftDbId = null;
+let supabaseSyncTimer = null;
+let isSupabaseSyncing = false;
+let pendingSupabaseSync = false;
 
 function idGen() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
   return Math.random().toString(36).slice(2, 10);
 }
 
@@ -445,6 +453,196 @@ async function apiRequest(path, method = 'GET', body) {
   }
 }
 
+function toIsoDate(value) {
+  const dt = value ? new Date(value) : new Date();
+  if (Number.isNaN(dt.getTime())) return new Date().toISOString();
+  return dt.toISOString();
+}
+
+function requestSupabaseSync() {
+  if (!supabaseClient) return;
+  if (supabaseSyncTimer) window.clearTimeout(supabaseSyncTimer);
+  supabaseSyncTimer = window.setTimeout(() => {
+    supabaseSyncTimer = null;
+    void persistSupabaseSnapshot();
+  }, 350);
+}
+
+async function persistSupabaseSnapshot() {
+  if (!supabaseClient) return;
+  if (isSupabaseSyncing) {
+    pendingSupabaseSync = true;
+    return;
+  }
+  isSupabaseSyncing = true;
+
+  try {
+    const settingsPayload = {
+      cafe_name: state.settings.cafeName,
+      address: state.settings.address,
+      phone: state.settings.phone,
+      receipt_qr_image: state.settings.receiptQrImage || null,
+    };
+    if (settingsDbId) {
+      const { error } = await supabaseClient
+        .from('app_settings')
+        .upsert([{ id: settingsDbId, ...settingsPayload }], { onConflict: 'id' });
+      if (error) throw error;
+    } else {
+      const { data, error } = await supabaseClient
+        .from('app_settings')
+        .insert([settingsPayload])
+        .select('id')
+        .limit(1);
+      if (error) throw error;
+      settingsDbId = data?.[0]?.id || null;
+    }
+
+    const categoriesPayload = state.categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      sizes: Array.isArray(c.sizes) ? c.sizes : [],
+      is_drink: Boolean(c.isDrink),
+    }));
+    if (categoriesPayload.length) {
+      const { error } = await supabaseClient.from('categories').upsert(categoriesPayload, { onConflict: 'id' });
+      if (error) throw error;
+    }
+
+    const productsPayload = state.products.map((p) => ({
+      id: p.id,
+      category_id: p.categoryId,
+      name: p.name,
+      size: p.size || null,
+      price: Number(p.price || 0),
+      stock: Number(p.stock || 0),
+      image: p.image || null,
+    }));
+    if (productsPayload.length) {
+      const { error } = await supabaseClient.from('products').upsert(productsPayload, { onConflict: 'id' });
+      if (error) throw error;
+    }
+
+    const customersPayload = state.customers.map((c) => {
+      if (!c.id) c.id = idGen();
+      return {
+        id: c.id,
+        name: c.name || 'Walk-in Customer',
+        phone: c.phone || '-',
+        email: c.email || null,
+      };
+    });
+    if (customersPayload.length) {
+      const { error } = await supabaseClient.from('customers').upsert(customersPayload, { onConflict: 'id' });
+      if (error) throw error;
+    }
+
+    const ordersPayload = state.orders.map((o) => {
+      const payload = {
+        order_code: o.id,
+        customer_name: o.customerName || 'Walk-in Customer',
+        order_type: o.orderType || 'Dine In',
+        payment_method: o.paymentMethod || 'Pending',
+        payment_status: o.paymentStatus || 'Unpaid',
+        fulfillment_status: o.fulfillmentStatus || 'Preparing',
+        subtotal: Number(o.subtotal || o.total || 0),
+        total: Number(o.total || 0),
+        received: Number(o.received || 0),
+        change: Number(o.change || 0),
+      };
+      if (o.dbId) payload.id = o.dbId;
+      return payload;
+    });
+    if (ordersPayload.length) {
+      const { data, error } = await supabaseClient
+        .from('orders')
+        .upsert(ordersPayload, { onConflict: 'order_code' })
+        .select('id,order_code');
+      if (error) throw error;
+      const orderIdMap = new Map((data || []).map((row) => [row.order_code, row.id]));
+      state.orders.forEach((order) => {
+        const mapped = orderIdMap.get(order.id);
+        if (mapped) order.dbId = mapped;
+      });
+    }
+
+    for (const order of state.orders) {
+      if (!order.dbId) continue;
+      const { error: deleteErr } = await supabaseClient.from('order_items').delete().eq('order_id', order.dbId);
+      if (deleteErr) throw deleteErr;
+
+      const itemPayload = (order.items || []).map((item) => ({
+        order_id: order.dbId,
+        product_id: item.id || null,
+        item_name: item.name,
+        quantity: Number(item.qty || 0),
+        unit_price: Number(item.price || 0),
+        line_total: Number((item.qty || 0) * (item.price || 0)),
+      }));
+      if (itemPayload.length) {
+        const { error: itemErr } = await supabaseClient.from('order_items').insert(itemPayload);
+        if (itemErr) throw itemErr;
+      }
+    }
+
+    const orderCodeToDbId = new Map(state.orders.filter((o) => o.dbId).map((o) => [o.id, o.dbId]));
+    const transactionsPayload = state.transactions.map((tx) => ({
+      transaction_code: tx.id,
+      order_id: orderCodeToDbId.get(tx.orderId) || null,
+      method: tx.method || 'Cash',
+      amount: Number(tx.amount || 0),
+      created_at: toIsoDate(tx.date),
+    }));
+    if (transactionsPayload.length) {
+      const { error } = await supabaseClient
+        .from('transactions')
+        .upsert(transactionsPayload, { onConflict: 'transaction_code' });
+      if (error) throw error;
+    }
+
+    const expensesPayload = state.expenses.map((expense) => {
+      if (!expense.id) expense.id = idGen();
+      return {
+        id: expense.id,
+        note: expense.note,
+        amount: Number(expense.amount || 0),
+        created_at: toIsoDate(expense.time),
+      };
+    });
+    if (expensesPayload.length) {
+      const { error } = await supabaseClient.from('expenses').upsert(expensesPayload, { onConflict: 'id' });
+      if (error) throw error;
+    }
+
+    const shiftPayload = {
+      is_open: Boolean(state.shift.isOpen),
+      opening_amount: Number(state.shift.openingAmount || 0),
+      drawer_amount: Number(state.shift.drawerAmount || 0),
+      change_returned: Number(state.shift.changeReturned || 0),
+      opened_at: state.shift.isOpen ? new Date().toISOString() : null,
+      closed_at: state.shift.isOpen ? null : new Date().toISOString(),
+    };
+    if (shiftDbId) {
+      const { error } = await supabaseClient
+        .from('shifts')
+        .upsert([{ id: shiftDbId, ...shiftPayload }], { onConflict: 'id' });
+      if (error) throw error;
+    } else {
+      const { data, error } = await supabaseClient.from('shifts').insert([shiftPayload]).select('id').limit(1);
+      if (error) throw error;
+      shiftDbId = data?.[0]?.id || null;
+    }
+  } catch (error) {
+    console.warn('Supabase sync failed.', error);
+  } finally {
+    isSupabaseSyncing = false;
+    if (pendingSupabaseSync) {
+      pendingSupabaseSync = false;
+      requestSupabaseSync();
+    }
+  }
+}
+
 async function fetchSupabaseBootstrap() {
   if (!supabaseClient) return null;
 
@@ -500,6 +698,8 @@ async function fetchSupabaseBootstrap() {
 
   const settingsRow = settingsRes.data?.[0];
   const shiftRow = shiftRes.data?.[0];
+  settingsDbId = settingsRow?.id || null;
+  shiftDbId = shiftRow?.id || null;
 
   return {
     settings: settingsRow
@@ -959,6 +1159,7 @@ function completeSale() {
   renderFinance();
   renderInventory();
   renderDashboard();
+  requestSupabaseSync();
   setSection('orders');
 }
 
@@ -1182,6 +1383,7 @@ function saveEditedOrder() {
   renderFinance();
   renderInventory();
   renderDashboard();
+  requestSupabaseSync();
 }
 
 function canCompleteOrder(order) {
@@ -1261,6 +1463,7 @@ function submitMarkPaid() {
   renderCustomersList();
   renderFinance();
   renderDashboard();
+  requestSupabaseSync();
 }
 
 function markOrderComplete(orderId) {
@@ -1275,6 +1478,7 @@ function markOrderComplete(orderId) {
   order.fulfillmentStatus = 'Completed';
   renderOrders();
   renderDashboard();
+  requestSupabaseSync();
 }
 
 function openOrderReceipt(orderId) {
@@ -1570,6 +1774,7 @@ async function saveProductEditor() {
   renderInventory();
   renderFinance();
   renderDashboard();
+  requestSupabaseSync();
 }
 
 function deleteProductById(productId) {
@@ -1587,6 +1792,7 @@ function deleteProductById(productId) {
   renderInventory();
   renderFinance();
   renderDashboard();
+  requestSupabaseSync();
 }
 
 function setSettingsForm() {
@@ -2107,12 +2313,14 @@ function bindEvents() {
     el.shiftOpenAmount.value = '';
     renderDashboard();
     renderFinance();
+    requestSupabaseSync();
   });
   el.closeShiftBtn.addEventListener('click', () => {
     addShiftLog('Shift Closed', `Closing drawer ${money(state.shift.drawerAmount)}`);
     state.shift.isOpen = false;
     renderDashboard();
     renderFinance();
+    requestSupabaseSync();
   });
   el.expenseForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -2131,11 +2339,12 @@ function bindEvents() {
       return;
     }
     state.shift.drawerAmount -= amount;
-    state.expenses.unshift({ note, amount, time: nowStamp() });
+    state.expenses.unshift({ id: idGen(), note, amount, time: nowStamp() });
     addShiftLog('Expense', `${note}: -${money(amount)}`);
     el.expenseForm.reset();
     renderDashboard();
     renderFinance();
+    requestSupabaseSync();
   });
   el.ordersPagination.addEventListener('click', (event) => {
     const target = event.target;
@@ -2205,6 +2414,7 @@ function bindEvents() {
     el.customerForm.reset();
     pager.customersPage = 1;
     populateCustomers();
+    requestSupabaseSync();
   });
 
   el.categoryForm.addEventListener('submit', (event) => {
@@ -2220,6 +2430,7 @@ function bindEvents() {
     renderCheckoutProducts();
     renderInventory();
     renderDashboard();
+    requestSupabaseSync();
   });
 
   el.productForm.addEventListener('submit', async (event) => {
@@ -2269,6 +2480,7 @@ function bindEvents() {
     renderInventory();
     renderFinance();
     renderDashboard();
+    requestSupabaseSync();
   });
 
   el.inventoryList.addEventListener('click', (event) => {
@@ -2300,6 +2512,7 @@ function bindEvents() {
     renderCheckoutProducts();
     renderFinance();
     renderDashboard();
+    requestSupabaseSync();
   });
 
   el.closeProductEdit.addEventListener('click', closeProductEditor);
@@ -2325,6 +2538,7 @@ function bindEvents() {
       receiptQrImage,
     };
     renderCart();
+    requestSupabaseSync();
   });
 }
 
