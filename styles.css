@@ -599,11 +599,14 @@ thead th {
 }
 
 .inventory-controls button {
-  width: 34px;
   min-height: 34px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: #fff;
+}
+
+.inventory-controls button[data-stock] {
+  width: 34px;
 }
 
 .stats-grid {
